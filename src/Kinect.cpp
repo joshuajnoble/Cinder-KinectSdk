@@ -200,6 +200,12 @@ namespace KinectSdk
 		mVerbose = enable;
 	}
 
+	void Kinect::enableFaceTracking( bool enable )
+	{
+		mEnabledFaceTracking = enable;
+	}
+
+
 	void Kinect::enableVideo( bool enable )
 	{
 		bool toggle = mEnabledVideo != enable;
@@ -586,9 +592,7 @@ namespace KinectSdk
 									Vector4 point = *( skeletonData.SkeletonPositions + j );
 									( mSkeletons.begin() + i )->insert( std::make_pair<JointName, Vec3f>( (JointName)j, Vec3f( point.x, point.y, point.z ) ) );
 								}
-
 							}
-
 						}
 
 						// Update frame rate
@@ -597,6 +601,12 @@ namespace KinectSdk
 
 						// Set flag
 						mNewSkeletons = true;
+
+						// can't track faces without skeletons, so we check here:
+						if(mEnabledFaceTracking)
+						{
+						}
+
 
 					}
 
@@ -642,7 +652,6 @@ namespace KinectSdk
 					}
 
 				}
-
 			}
 
 			// Pause thread
@@ -945,6 +954,8 @@ namespace KinectSdk
 			enableDepth( enabledDepth );
 			enableSkeletons( enabledSkeletons );
 			enableVideo( enabledVideo );
+
+			if(mEnabledFaceTracking 
 
 			// Start thread
 			mCapture = true;

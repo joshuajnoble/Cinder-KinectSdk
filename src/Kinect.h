@@ -43,6 +43,9 @@
 #include <map>
 #include "ole2.h"
 #include "NuiApi.h"
+
+#include "FaceTracker.h"
+
 #include <vector>
 
 // Kinect NUI wrapper for Cinder
@@ -53,6 +56,8 @@ namespace KinectSdk
 	typedef NUI_IMAGE_RESOLUTION			ImageResolution;
 	typedef NUI_SKELETON_POSITION_INDEX		JointName;
 	typedef std::map<JointName, ci::Vec3f>	Skeleton;
+
+
 
 	// Kinect sensor interface
 	class Kinect
@@ -137,7 +142,7 @@ namespace KinectSdk
 		const std::vector<Skeleton>&	getSkeletons();
 		//! Returns frame rate of skeleton processing.
 		float							getSkeletonsFrameRate() const;
-		//! Return number of tracked users. Depth resolution must be no more than 320x240 with user tracking enabled.
+		//! Return number of tr acked users. Depth resolution must be no more than 320x240 with user tracking enabled.
 		int32_t							getUserCount();
 		/*! Return latest color image fra,e. Call Kinect::checkNewVideoFrame() before this to improve performance and avoid
 		    threading collisions. Sets flag to false. */
@@ -189,6 +194,7 @@ namespace KinectSdk
 		bool							mEnabledDepth;
 		bool							mEnabledSkeletons;
 		bool							mEnabledVideo;
+		bool							mEnabledFaceTracking;
 
 		bool							mNewDepthFrame;
 		bool							mNewSkeletons;
@@ -219,6 +225,9 @@ namespace KinectSdk
 		int32_t							mDeviceIndex;
 		bool							mEnabledNearMode;
 		INuiSensor						*mSensor;
+
+		FaceTracker						*mFaceTracker;
+
 		double							mTiltRequestTime;
 
 		bool							mIsSkeletonDevice;
