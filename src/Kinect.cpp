@@ -605,6 +605,7 @@ namespace KinectSdk
 						// can't track faces without skeletons, so we check here:
 						if(mEnabledFaceTracking)
 						{
+
 						}
 
 
@@ -953,9 +954,7 @@ namespace KinectSdk
 			mEnabledVideo = false;
 			enableDepth( enabledDepth );
 			enableSkeletons( enabledSkeletons );
-			enableVideo( enabledVideo );
-
-			if(mEnabledFaceTracking 
+			enableVideo( enabledVideo ); 
 
 			// Start thread
 			mCapture = true;

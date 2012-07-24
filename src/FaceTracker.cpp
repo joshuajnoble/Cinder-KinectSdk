@@ -1,6 +1,6 @@
 #include "FaceTracker.h"
 
-FaceTracker::FaceTracker( int rgbImageHeight, int rgbImageWidth, int depthWidth, int depthHeight ) {
+FaceTracker::FaceTracker( int rgbImageHeight, int rgbImageWidth, int depthWidth, int depthHeight, int numUsers ) {
 
 	// Video camera config with width, height, focal length in pixels
 	// NUI_CAMERA_COLOR_NOMINAL_FOCAL_LENGTH_IN_PIXELS focal length is computed for 640x480 resolution
@@ -12,12 +12,13 @@ FaceTracker::FaceTracker( int rgbImageHeight, int rgbImageWidth, int depthWidth,
 	// If you use different resolutions, multiply this focal length by the scaling factor
 	FT_CAMERA_CONFIG depthCameraConfig = {320, 240, NUI_CAMERA_DEPTH_NOMINAL_FOCAL_LENGTH_IN_PIXELS};
 
-	// for each user we want to make a new face tracker, right
-	for( int i = 0; i < kinect->getUserCount(); i++) {
+	// for each user we want to make a new face tracker
+	//for( int i = 0; i < kinect->getUserCount(); i++) {
+	for( int i = 0; i < numUsers; i++) {
 		FTHelperContext *context = new FTHelperContext();
 		context->m_pFaceTracker = FTCreateFaceTracker(NULL);
 		context->m_pFaceTracker->Initialize( &videoCameraConfig, &depthCameraConfig, NULL, NULL );
-		this->mContexts.push_back(context);
+		mContexts.push_back(context);
 	}
 
 }
@@ -70,7 +71,7 @@ void FaceTracker::checkFaces(NUI_SKELETON_FRAME *skeleton, IFTImage *pColorImage
         }
 
         //mContexts[i]->m_LastTrackSucceeded = SUCCEEDED(hrFT) && SUCCEEDED(m_UserContext[i].m_pFTResult->GetStatus());
-		if (mContexts[i]->m_pFTResult->GetStatus() == mContexts[i]->m_LastTrackSucceeded)
+		if (mContexts[i]->m_pFTResult->GetStatus() == 1 && mContexts[i]->m_LastTrackSucceeded)
         {
 			// pass the handle to the face tracker
 			mContexts[i]->m_pFaceTracker->GetFaceModel( &mContexts[i]->m_pFTModel );
@@ -84,12 +85,12 @@ Vec2f FaceTracker::getCenterOfFace( UINT userId ) {
 
 	Vec2f v;
 
-	for( int i = 0; i < mContexts.size(); i++) {
+	for( unsigned int i = 0; i < mContexts.size(); i++) {
 		if(mContexts[i]->m_SkeletonId == userId) {
 
 			RECT faceCenter;
 			mContexts[i]->m_pFTResult->GetFaceRect(&faceCenter);
-			v.set(faceCenter.left + (faceCenter.right - faceCenter.left / 2), faceCenter.top + (faceCenter.top - faceCenter.bottom / 2));
+			v.set( (float) faceCenter.left + (faceCenter.right - faceCenter.left / 2), (float) faceCenter.top + (faceCenter.top - faceCenter.bottom / 2));
 			return v;
 		}
 	}  
@@ -100,7 +101,7 @@ Vec2f FaceTracker::getCenterOfFace( UINT userId ) {
 std::vector<Vec2f> FaceTracker::getFacePoints( UINT userId )
 {
 	std::vector<Vec2f> vec;
-	for( int i = 0; i < mContexts.size(); i++) {
+	for( unsigned int i = 0; i < mContexts.size(); i++) {
 		if(mContexts[i]->m_SkeletonId == userId) {
 
 			FLOAT scale;
@@ -127,14 +128,14 @@ std::vector<Vec2f> FaceTracker::getFacePoints( UINT userId )
 int FaceTracker::get3DPose( UINT userId, float *scale, Vec3f *rotation, Vec3f *translation )
 {
 
-	for( int i = 0; i < mContexts.size(); i++) {
+	for( unsigned int i = 0; i < mContexts.size(); i++) {
 		if(mContexts[i]->m_SkeletonId == userId) {
 
 			FLOAT scale;
 			FLOAT rotationXYZ[3];
 			FLOAT translationXYZ[3];
 
-			mContexts[i]->m_pFTResult->Get3DPose(scale, &rotationXYZ[0], &translationXYZ[0]);
+			mContexts[i]->m_pFTResult->Get3DPose(&scale, &rotationXYZ[0], &translationXYZ[0]);
 
 			rotation->set( rotationXYZ[0], rotationXYZ[1], rotationXYZ[2] );
 			translation->set( translationXYZ[0], translationXYZ[1], translationXYZ[2] );
@@ -144,6 +145,9 @@ int FaceTracker::get3DPose( UINT userId, float *scale, Vec3f *rotation, Vec3f *t
 	return 0;
 }
 
-Rectf FaceTracker::getFaceRect( UINT userId )
+ci::Rectf FaceTracker::getFaceRect( UINT userId )
 {
+
+	ci::Rectf r(0, 0, 100, 100);
+	return r;
 }

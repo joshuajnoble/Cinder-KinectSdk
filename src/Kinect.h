@@ -43,9 +43,7 @@
 #include <map>
 #include "ole2.h"
 #include "NuiApi.h"
-
 #include "FaceTracker.h"
-
 #include <vector>
 
 // Kinect NUI wrapper for Cinder
@@ -114,6 +112,8 @@ namespace KinectSdk
 		void							enableVerbose( bool enable = true );
 		//! Enables color video stream. Default is true.
 		void							enableVideo( bool enable = true );
+		//! Enables face tracking in the Kinect
+		void							enableFaceTracking( bool enable = true );
 
 		// Remove background for better user tracking
 		void							removeBackground( bool remove = true );
