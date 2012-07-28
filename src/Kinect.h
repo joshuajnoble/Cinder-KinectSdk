@@ -160,6 +160,8 @@ namespace KinectSdk
 		//! Sets camera angle to \a degrees. Default is 0.
 		void							setCameraAngle( int32_t degrees = 0 );
 
+		FaceTracker						*getFaceTracker() { return mFaceTracker; }
+
 	private:
 
 		static const int32_t			WAIT_TIME = 250;

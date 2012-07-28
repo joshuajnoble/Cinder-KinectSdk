@@ -88,6 +88,7 @@ namespace KinectSdk
 
 	KinectRef Kinect::create()
 	{
+
 		return KinectRef( new Kinect( ) );
 	}
 
@@ -100,6 +101,11 @@ namespace KinectSdk
 		for ( int32_t i = 0; i < NUI_SKELETON_COUNT; i++ ) {
 			mSkeletons.push_back( Skeleton() );
 		}
+
+		if(mEnabledFaceTracking) {
+			mFaceTracker = new FaceTracker( mVideoHeight, mVideoWidth, mDepthWidth, mDepthHeight, NUI_SKELETON_COUNT );
+		}
+
 	}
 
 	Kinect::~Kinect()
