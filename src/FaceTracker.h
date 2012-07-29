@@ -41,5 +41,15 @@
 		Rectf getFaceRect( UINT userId );
 		void checkFaces(NUI_SKELETON_FRAME *skeleton, IFTImage *pColorImage, IFTImage *pDepthImage, int currentZoom, int viewOffset);
 
+		bool lastTrackSucceeded();
+		bool lastTrackSucceeded(int userId);
+
+		void startTracking( const FT_SENSOR_DATA *pSensorData, const RECT *pRoi, const FT_VECTOR3D headPoints[2]);
+		void continueTracking( const FT_SENSOR_DATA *pSensorData, const FT_VECTOR3D headPoints[2]);
+
+		void startTracking( const FT_SENSOR_DATA *pSensorData, const RECT *pRoi, const FT_VECTOR3D headPoints[2], int skeletonId);
+
+		void continueTracking( const FT_SENSOR_DATA *pSensorData, const FT_VECTOR3D headPoints[2], int skeletonId);
+
 	};
 //};

@@ -104,6 +104,8 @@ namespace KinectSdk
 
 		if(mEnabledFaceTracking) {
 			mFaceTracker = new FaceTracker( mVideoHeight, mVideoWidth, mDepthWidth, mDepthHeight, NUI_SKELETON_COUNT );
+			mFTColorImage = FTCreateImage();
+			mFTDepthImage = FTCreateImage();
 		}
 
 	}
@@ -429,7 +431,7 @@ namespace KinectSdk
 	{
 		if ( mSensor != 0) {
 			HRESULT hr = mSensor->NuiImageStreamOpen( mDepthResolution != ImageResolution::NUI_IMAGE_RESOLUTION_640x480 && 
-				HasSkeletalEngine( mSensor ) ? NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX : NUI_IMAGE_TYPE_DEPTH, mDepthResolution, 0, 2, 0, &mDepthStreamHandle );;
+				HasSkeletalEngine( mSensor ) ? NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX : NUI_IMAGE_TYPE_DEPTH, mDepthResolution, 0, 2, 0, &mDepthStreamHandle );
 			if ( FAILED( hr ) ) {
 				trace( "Unable to open depth image stream: " );
 				error( hr );
@@ -533,6 +535,12 @@ namespace KinectSdk
 							trace( "Invalid buffer length received" );
 						} else {
 							pixelToDepthSurface( mDepthSurface, (uint16_t*)lockedRect.pBits );
+
+							// if face tracking, copy here
+							if(mEnabledFaceTracking)
+								//memcpy(mFTColorImage->GetBuffer(), PBYTE(lockedRect.pBits), min(mFTColorImage->GetBufferSize(), UINT(texture->BufferLen())));
+								memcpy(mFTDepthImage->GetBuffer(), PBYTE(lockedRect.pBits), min(mFTDepthImage->GetBufferSize(), UINT(texture->BufferLen())));
+
 						}
 
 						// Clean up
@@ -561,7 +569,7 @@ namespace KinectSdk
 				}
 
 				//////////////////////////////////////////////////////////////////////////////////////////////
-
+				_NUI_SKELETON_DATA skeletonData;
 				if ( mEnabledSkeletons && mIsSkeletonDevice && !mNewSkeletons ) {
 
 					// Acquire skeleton
@@ -591,7 +599,7 @@ namespace KinectSdk
 								}
 
 								// Get skeleton data
-								_NUI_SKELETON_DATA skeletonData = *( skeletonFrame.SkeletonData + i );
+								skeletonData = *( skeletonFrame.SkeletonData + i );
 
 								// Set joint data
 								for ( int32_t j = 0; j < (int32_t)NUI_SKELETON_POSITION_COUNT; j++ ) {
@@ -607,13 +615,6 @@ namespace KinectSdk
 
 						// Set flag
 						mNewSkeletons = true;
-
-						// can't track faces without skeletons, so we check here:
-						if(mEnabledFaceTracking)
-						{
-
-						}
-
 
 					}
 
@@ -639,6 +640,10 @@ namespace KinectSdk
 						}
 						if ( lockedRect.Pitch != 0 ) {
 							pixelToVideoSurface( mVideoSurface, (uint8_t *)lockedRect.pBits );
+
+							if(mEnabledFaceTracking)
+								memcpy(mFTColorImage->GetBuffer(), PBYTE(lockedRect.pBits), min(mFTColorImage->GetBufferSize(), UINT(texture->BufferLen())));
+
 						} else {
 							trace( "Invalid buffer length received." );
 						}
@@ -659,6 +664,32 @@ namespace KinectSdk
 					}
 
 				}
+
+				if(mEnabledFaceTracking)
+				{
+
+					//FT_SENSOR_DATA sensorData(mFTColorImage, mFTDepthImage, mSensor.GetZoomFactor(), m_KinectSensor.GetViewOffSet());
+					FT_SENSOR_DATA sensorData(mFTColorImage, mFTDepthImage);
+
+					FT_VECTOR3D hint[2];
+					hint[0].x = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_HEAD].x;
+					hint[0].y = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_HEAD].y;
+					hint[0].z = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_HEAD].z;
+
+					hint[1].x = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_SPINE].x;
+					hint[1].y = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_SPINE].y;
+					hint[1].z = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_SPINE].z;
+
+					if (mFaceTracker->lastTrackSucceeded())
+					{
+						mFaceTracker->continueTracking(&sensorData, hint);
+					}
+					else
+					{
+						mFaceTracker->startTracking(&sensorData, NULL, hint);
+					}
+				}
+
 			}
 
 			// Pause thread

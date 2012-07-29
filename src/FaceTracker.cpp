@@ -151,3 +151,41 @@ ci::Rectf FaceTracker::getFaceRect( UINT userId )
 	ci::Rectf r(0, 0, 100, 100);
 	return r;
 }
+
+bool FaceTracker::lastTrackSucceeded()
+{
+	return mContexts[0]->m_LastTrackSucceeded;
+}
+		
+bool FaceTracker::lastTrackSucceeded(int userId)
+{
+	for( int i = 0; i < mContexts.size(); i++) {
+		if(mContexts[i]->m_SkeletonId == userId) {
+			return mContexts[i]->m_LastTrackSucceeded;
+		}
+	}
+	return false;
+}
+
+void FaceTracker::startTracking( const FT_SENSOR_DATA *pSensorData, const RECT *pRoi, const FT_VECTOR3D headPoints[2])
+{
+	mContexts[0]->m_pFaceTracker->StartTracking(pSensorData, pRoi, headPoints, mContexts[0]->m_pFTResult);
+}
+
+void FaceTracker::continueTracking( const FT_SENSOR_DATA *pSensorData, const FT_VECTOR3D headPoints[2]) {
+	mContexts[0]->m_pFaceTracker->ContinueTracking(pSensorData, headPoints, mContexts[0]->m_pFTResult);
+}
+
+void FaceTracker::startTracking( const FT_SENSOR_DATA *pSensorData, const RECT *pRoi, const FT_VECTOR3D headPoints[2], int skeletonId) {
+	for( int i = 0; i < mContexts.size(); i++) {
+		if(mContexts[i]->m_SkeletonId == skeletonId)
+			mContexts[0]->m_pFaceTracker->StartTracking(pSensorData, pRoi, headPoints, mContexts[0]->m_pFTResult);
+	}
+}
+void FaceTracker::continueTracking( const FT_SENSOR_DATA *pSensorData, const FT_VECTOR3D headPoints[2], int skeletonId)
+{
+		for( int i = 0; i < mContexts.size(); i++) {
+		if(mContexts[i]->m_SkeletonId == skeletonId)
+			mContexts[0]->m_pFaceTracker->ContinueTracking(pSensorData, headPoints, mContexts[0]->m_pFTResult);
+	}
+}

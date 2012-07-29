@@ -229,6 +229,8 @@ namespace KinectSdk
 		INuiSensor						*mSensor;
 
 		FaceTracker						*mFaceTracker;
+		IFTImage*						mFTColorImage;
+		IFTImage*						mFTDepthImage;
 
 		double							mTiltRequestTime;
 
