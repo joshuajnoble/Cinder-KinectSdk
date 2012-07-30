@@ -58,7 +58,7 @@ public:
 	void keyDown( ci::app::KeyEvent event );
 	void mouseDown( ci::app::MouseEvent event );
 	void mouseDrag( ci::app::MouseEvent event );
-	void prepareSettings( ci::app::AppBasic::Settings * settings );
+	void prepareSettings( ci::app::AppBasic::Settings *settings );
 	void shutdown();
 	void setup();
 	void update();
@@ -140,7 +140,7 @@ void PointCloudApp::mouseDrag( ci::app::MouseEvent event )
 }
 
 // Prepare window
-void PointCloudApp::prepareSettings( Settings * settings )
+void PointCloudApp::prepareSettings( Settings *settings )
 {
 	settings->setWindowSize( 1024, 768 );
 	settings->setFrameRate( 60.0f );
@@ -166,9 +166,7 @@ void PointCloudApp::setup()
 
 	// Start Kinect with isolated depth tracking only
 	mKinect = Kinect::create();
-	mKinect->enableSkeletons( false );
-	mKinect->enableVideo( false );
-	mKinect->start( 0, ImageResolution::NUI_IMAGE_RESOLUTION_640x480, ImageResolution::NUI_IMAGE_RESOLUTION_640x480 );
+	mKinect->start( DeviceOptions().enableSkeletonTracking( false ).enableVideo( false ).setDepthResolution( ImageResolution::NUI_IMAGE_RESOLUTION_640x480 ) );
 
 	// Set up camera
 	mArcball = Arcball( getWindowSize() );
@@ -191,39 +189,35 @@ void PointCloudApp::update()
 
 	// Device is capturing
 	if ( mKinect->isCapturing() ) {
+		mKinect->update();
 
-		// Check for latest depth map
-		if ( mKinect->checkNewDepthFrame() ) {
+		// Clear point list
+		Vec3f offset( Vec2f( kKinectSize ) * Vec2f( -0.5f, 0.5f ) );
+		offset.z = mCamera.getEyePoint().z * 0.5f;
+		Vec3f position = Vec3f::zero();
+		mPoints.clear();
 
-			// Clear point list
-			Vec3f offset( Vec2f( kKinectSize ) * Vec2f( -0.5f, 0.5f ) );
-			offset.z = mCamera.getEyePoint().z * 0.5f;
-			Vec3f position = Vec3f::zero();
-			mPoints.clear();
+		// Iterate image rows
+		for ( int32_t y = 0; y < kKinectSize.y; y++ ) {
+			for ( int32_t x = 0; x < kKinectSize.x; x++ ) {
 
-			// Iterate image rows
-			for ( int32_t y = 0; y < kKinectSize.y; y++ ) {
-				for ( int32_t x = 0; x < kKinectSize.x; x++ ) {
+				// Read depth as 0.0 - 1.0 float
+				float depth = mKinect->getDepthAt( Vec2i( x, y ) );
 
-					// Read depth as 0.0 - 1.0 float
-					float depth = mKinect->getDepthAt( Vec2i( x, y ) );
-
-					// Add position to point list
-					if ( depth > 0.0f ) {
-						position.z = depth * -mCamera.getEyePoint().z * 2.0f;
-						mPoints.push_back( position * Vec3f( 1.1f, -1.1f, 1.0f ) + offset );
-					}
-
-					// Shift point
-					position.x++;
-
+				// Add position to point list
+				if ( depth > 0.0f ) {
+					position.z = depth * -mCamera.getEyePoint().z * 2.0f;
+					mPoints.push_back( position * Vec3f( 1.1f, -1.1f, 1.0f ) + offset );
 				}
 
-				// Update position
-				position.x = 0.0f;
-				position.y++;
+				// Shift point
+				position.x++;
 
 			}
+
+			// Update position
+			position.x = 0.0f;
+			position.y++;
 
 		}
 

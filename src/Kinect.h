@@ -37,7 +37,10 @@
 #pragma once
 
 // Includes
+#include "boost/signals2.hpp"
 #include "cinder/Cinder.h"
+#include "cinder/Matrix.h"
+#include "cinder/Quaternion.h"
 #include "cinder/Surface.h"
 #include "cinder/Thread.h"
 #include <map>
@@ -46,123 +49,239 @@
 #include "FaceTracker.h"
 #include <vector>
 
-// Kinect NUI wrapper for Cinder
+// Kinect SDK wrapper for Cinder
 namespace KinectSdk
 {
 
-	typedef std::shared_ptr<class Kinect>	KinectRef;
+	class Kinect;
+	typedef NUI_SKELETON_BONE_ROTATION		BoneRotation;
 	typedef NUI_IMAGE_RESOLUTION			ImageResolution;
 	typedef NUI_SKELETON_POSITION_INDEX		JointName;
-	typedef std::map<JointName, ci::Vec3f>	Skeleton;
+	typedef std::shared_ptr<Kinect>			KinectRef;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	class Bone
+	{
+	public:
+		//! Returns rotation of the bone relative to camera coordinates.
+		const ci::Quatf&		getAbsoluteRotation() const;
+		//! Returns rotation matrix of the bone relative to camera coordinates.
+		const ci::Matrix44f&	getAbsoluteRotationMatrix() const;
+		//! Returns index of end joint.
+		JointName				getEndJoint() const;
+		//! Returns position of the bone's start joint.
+		const ci::Vec3f&		getPosition() const;
+		//! Returns rotation of the bone relative to the parent bone.
+		const ci::Quatf&		getRotation() const;
+		//! Returns rotation matrix of the bone relative to the parent bone.
+		const ci::Matrix44f&	getRotationMatrix() const;
+		//! Returns index of start joint.
+		JointName				getStartJoint() const;
+	private:
+		Bone( const Vector4 &position, const _NUI_SKELETON_BONE_ORIENTATION &bone );
+		ci::Matrix44f	mAbsRotMat;
+		ci::Quatf		mAbsRotQuat;
+		JointName		mJointStart;
+		JointName		mJointEnd;
+		ci::Vec3f		mPosition;
+		ci::Matrix44f	mRotMat;
+		ci::Quatf		mRotQuat;
+
+		friend class	Kinect;
+	};
+	typedef std::map<JointName, Bone>	Skeleton;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+
+	class DeviceOptions
+	{
+	public:
+		//! Default settings
+		DeviceOptions();
+
+		//! Returns resolution of depth image.
+		ImageResolution		getDepthResolution() const; 
+		//! Returns size of depth image.
+		const ci::Vec2i&	getDepthSize() const; 
+		//! Returns unique ID for this device.
+		const std::string&	getDeviceId() const;
+		//! Returns 0-index for this device.
+		int32_t				getDeviceIndex() const;
+		//! Returns resolution of video image.
+		ImageResolution		getVideoResolution() const; 
+		//! Returns size of video image.
+		const ci::Vec2i&	getVideoSize() const; 
+		//! Returns true if depth tracking is enabled.
+		bool				isDepthEnabled() const;
+		//! Returns true if background remove is enabled.
+		bool				isNearModeEnabled() const; 
+		//! Returns true if seated mode is enabled.
+		bool				isSeatedModeEnabled() const;
+		//! Returns true if skeleton tracking is enabled.
+		bool				isSkeletonTrackingEnabled() const;
+		//! Returns true if color video stream is enabled.
+		bool				isVideoEnabled() const;
+		//! Returns true if user tracking is enabled.
+		bool				isUserTrackingEnabled() const;
+
+		//! Enables depth tracking.
+		DeviceOptions&		enableDepth( bool enable = true );
+		//! Enables near mode (Kinect for Windows only).
+		DeviceOptions&		enableNearMode( bool enable = true ); 
+		/*! Enables skeleton tracking. Set \a seatedMode to true to support seated skeletons.
+		    Only available on first device running at 320x240. */
+		DeviceOptions&		enableSkeletonTracking( bool enable = true, bool seatedMode = false );
+		//! Enables color video stream.
+		DeviceOptions&		enableVideo( bool enable = true );
+		/*! Enables user tracking. Only available on first device running at 320x240. */
+		DeviceOptions&		enableUserTracking( bool enable = true );
+		//! Sets resolution of depth image.
+		DeviceOptions&		setDepthResolution( const ImageResolution &resolution = ImageResolution::NUI_IMAGE_RESOLUTION_320x240 ); 
+		//! Starts device with this unique ID.
+		DeviceOptions&		setDeviceId( const std::string &id = "" ); 
+		//! Starts device with this 0-index.
+		DeviceOptions&		setDeviceIndex( int32_t index = 0 ); 
+		//! Sets resolution of video image.
+		DeviceOptions&		setVideoResolution( const ImageResolution &resolution = ImageResolution::NUI_IMAGE_RESOLUTION_640x480 ); 
+	private:
+		bool				mEnabledDepth;
+		bool				mEnabledSeatedMode;
+		bool				mEnabledSkeletonTracking;
+		bool				mEnabledUserTracking;
+		bool				mEnabledVideo;
+
+		ImageResolution		mDepthResolution;
+		ci::Vec2i			mDepthSize;
+		ImageResolution		mVideoResolution;
+		ci::Vec2i			mVideoSize;
+
+		std::string			mDeviceId;
+		int32_t				mDeviceIndex;
+		bool				mEnabledNearMode;
+	};
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
 	// Kinect sensor interface
 	class Kinect
 	{
-
 	public:
+
+		/*! Skeleton smoothing enumeration. Smoother transform improve skeleton accuracy, 
+			but increase latency. */
+		enum : uint_fast8_t
+		{
+			TRANSFORM_NONE, TRANSFORM_DEFAULT, TRANSFORM_SMOOTH, TRANSFORM_VERY_SMOOTH, TRANSFORM_MAX
+		} typedef Transform;
 
 		//! Maximum number of devices supported by the Kinect SDK.
 		static const int32_t			MAXIMUM_DEVICE_COUNT	= 8;
-
 		//! Maximum device tilt angle in positive or negative degrees.
 		static const int32_t			MAXIMUM_TILT_ANGLE		= 28;
 
-		// Creates pointer to instance of Kinect
-		static KinectRef				create();
-
-		//! Destructor
 		~Kinect();
 
+		//! Adds depth image callback.
+		uint32_t						addDepthCallback( const boost::function<void ( ci::Surface16u, const DeviceOptions& )> &callback );
+		//! Adds skeleton tracking callback.
+		uint32_t						addSkeletonTrackingCallback( const boost::function<void ( std::vector<Skeleton>, const DeviceOptions& )> &callback );
+		//! Adds video image callback.
+		uint32_t						addVideoCallback( const boost::function<void ( ci::Surface8u, const DeviceOptions& )> &callback );
+
+		//! Adds depth image callback
+		template<typename T> 
+		inline uint32_t					addDepthCallback( void ( T::*callbackFunction )( ci::Surface16u surface, const DeviceOptions& deviceOptions ), T *callbackObject )
+		{
+			return addDepthCallback( boost::function<void ( ci::Surface16u, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+		}
+		//! Adds skeleton tracking callback.
+		template<typename T> 
+		inline uint32_t					addSkeletonTrackingCallback( void ( T::*callbackFunction )( std::vector<Skeleton> skeletons, const DeviceOptions &deviceOptions ), T *callbackObject )
+		{
+			return addSkeletonTrackingCallback( boost::function<void ( std::vector<Skeleton>, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+		}
+		//! Adds video image callback.
+		template<typename T> 
+		inline uint32_t					addVideoCallback( void ( T::*callbackFunction )( ci::Surface8u surface, const DeviceOptions& deviceOptions ), T *callbackObject ) 
+		{
+			return addVideoCallback( boost::function<void ( ci::Surface8u, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+		}
+		//! Removes callback.
+		void							removeCallback( uint32_t id );
+
+		//! Creates pointer to instance of Kinect
+		static KinectRef				create();		
 		//! Returns number of Kinect devices.
 		static int32_t					getDeviceCount();
-
 		//! Returns use color for user ID \a id.
 		static ci::Colorf				getUserColor( uint32_t id );
 
-		/*! Start capturing on device at index \a deviceIndex (see Kinect::getDeviceIndex). Default is 0. \a videoResolution sets the video 
-		    resolution. Default is 640x480. \a depthResolution sets the depth resolution. Default is 320x240. \a nearMode sets near mode 
-			(Kinect for Windows only). Default is false. */
-		void							start( int32_t deviceIndex = 0, 
-			const ImageResolution &videoResolution = ImageResolution::NUI_IMAGE_RESOLUTION_640x480, 
-			const ImageResolution &depthResolution = ImageResolution::NUI_IMAGE_RESOLUTION_320x240, 
-			bool nearMode = false );
-		/*! Start capturing on device with unique ID \a deviceId (see Kinect::getDeviceId). \a videoResolution sets the video resolution. Default is 
-		    640x480. \a depthResolution sets the depth resolution. Default is 320x240. \a nearMode sets near mode (Kinect for Windows only). 
-			Default is false. */
-		void							start( std::string deviceId, 
-			const ImageResolution &videoResolution = ImageResolution::NUI_IMAGE_RESOLUTION_640x480, 
-			const ImageResolution &depthResolution = ImageResolution::NUI_IMAGE_RESOLUTION_320x240, 
-			bool nearMode = false );
+		//! Start capturing using settings specified in \a deviceOptions .
+		void							start( const DeviceOptions &deviceOptions = DeviceOptions() );
 		//! Stop capture.
 		void							stop();
+		//! Sends any new data to callbacks.
+		void							update();
 
 		//! Convert depth image to binary. \a invertImage to flip black and white. Default is false.
 		void							enableBinaryMode( bool enable = true, bool invertImage = false );
-		//! Enables depth tracking. Call before start(). Default is true.
-		void							enableDepth( bool enable = true );
-		//! Enables near mode (Kinect for Windows only). Call before start(). Default is false.
-		void							enableNearMode( bool enable = true );
-		//! Enables skeleton tracking. Call before start(). Only available on first device running 320x240. Default is true.
-		void							enableSkeletons( bool enable = true );
 		//! Enables user colors. Depth tracking at 320x240 or less must be enabled. Default is true.
 		void							enableUserColor( bool enable = true );
 		//! Enables verbose error reporting in debug console. Default is true.
 		void							enableVerbose( bool enable = true );
-		//! Enables color video stream. Default is true.
-		void							enableVideo( bool enable = true );
 		//! Enables face tracking in the Kinect
 		void							enableFaceTracking( bool enable = true );
-
-		// Remove background for better user tracking
+		//! Remove background for better user tracking.
 		void							removeBackground( bool remove = true );
 
-		//! Returns true if new depth frame is available. Sets flag to false when called.
-		bool							checkNewDepthFrame();
-		//! Returns true if new skeleton data is available. Sets flag to false when called.
-		bool							checkNewSkeletons();
-		//! Returns true if new color frame is available. Sets flag to false when called.
-		bool							checkNewVideoFrame();
-		//! Returns current camera angle in degrees between -28 and 28.
-		int32_t							getCameraAngle();
-		/* Returns 16-bit depth image (12-bit color values). Call Kinect::checkNewDepthFrame() to improve performance and avoid
-		   threading collisions. Consider using Kinect::getDepthAt() in lieu of reading the depth image. */
-		const ci::Surface16u&			getDepth();
 		//! Returns depth value as 0.0 - 1.0 float for pixel at \a pos.
 		float							getDepthAt( const ci::Vec2i &pos ) const;
 		//! Returns frame rate of depth image processing.
 		float							getDepthFrameRate() const;
-		//! Returns unique ID for this device.
-		std::string						getDeviceId() const;
-		//! Returns 0-index for this device.
-		int32_t							getDeviceIndex() const;
-		/*! Returns vector of available skeletons. Call Kinect::checkNewSkeletons() before this to improve performance and avoid
+		//! Returns options object for this device.
+		const DeviceOptions&			getDeviceOptions() const;
+		/*! Returns skeleton data. Call Kinect::checkNewSkeletons() before this to improve performance and avoid
 		    threading collisions. Sets flag to false. */
 		const std::vector<Skeleton>&	getSkeletons();
 		//! Returns frame rate of skeleton processing.
-		float							getSkeletonsFrameRate() const;
-		//! Return number of tr acked users. Depth resolution must be no more than 320x240 with user tracking enabled.
+		float							getSkeletonFrameRate() const;
+		//! Returns current device angle in degrees between -28 and 28.
+		int32_t							getTilt();
+		//! Returns number of tracked users. Depth resolution must be no more than 320x240 with user tracking enabled.
 		int32_t							getUserCount();
-		/*! Return latest color image fra,e. Call Kinect::checkNewVideoFrame() before this to improve performance and avoid
-		    threading collisions. Sets flag to false. */
-		const ci::Surface8u&			getVideo();
 		//! Returns frame rate of color image processing.
 		float							getVideoFrameRate() const;
+		
 		//! Returns true is actively capturing.
 		bool							isCapturing() const;
+
+		//! Flips input horizontally if \a flipped is true.
+		void							setFlipped( bool flipped = true );
+		//! Returns true if input is flipped.
+		bool							isFlipped() const;
 
 		//! Returns pixel location of skeleton position in depth image.
 		ci::Vec2i						getSkeletonDepthPos( const ci::Vec3f &position );
 		//! Returns pixel location of skeleton position in color image.
 		ci::Vec2i						getSkeletonVideoPos( const ci::Vec3f &position );
 
-		//! Sets camera angle to \a degrees. Default is 0.
-		void							setCameraAngle( int32_t degrees = 0 );
+		//! Sets device angle to \a degrees. Default is 0.
+		void							setTilt( int32_t degrees = 0 );
+
+		//! Return skeleton transform type.
+		int_fast8_t						getTransform() const;
+		//! Sets skeleton transform type.
+		void							setTransform( int_fast8_t transform = TRANSFORM_DEFAULT );
 
 		FaceTracker						*getFaceTracker() { return mFaceTracker; }
 
 	private:
+		typedef boost::signals2::connection			Callback;
+		typedef std::shared_ptr<Callback>			CallbackRef;
+		typedef std::map<uint32_t, CallbackRef>		CallbackList;
 
 		static const int32_t			WAIT_TIME = 500;
 
@@ -188,44 +307,39 @@ namespace KinectSdk
 		static std::vector<ci::Colorf>	getUserColors();
 
 		void							init( bool reset = false );
-		void							start( int32_t deviceIndex, std::string deviceId, const ImageResolution &videoResolution, 
-			const ImageResolution &depthResolution, bool nearMode );
-
+		
 		bool							mCapture;
 
 		bool							mEnabledDepth;
 		bool							mEnabledSkeletons;
 		bool							mEnabledVideo;
 		bool							mEnabledFaceTracking;
+		boost::signals2::signal<void ( ci::Surface16u, const DeviceOptions& )>			mSignalDepth;
+		boost::signals2::signal<void ( std::vector<Skeleton>, const DeviceOptions& )>	mSignalSkeleton;
+		boost::signals2::signal<void ( ci::Surface8u, const DeviceOptions& )>			mSignalVideo;
+		CallbackList					mCallbacks;
 
-		bool							mNewDepthFrame;
-		bool							mNewSkeletons;
-		bool							mNewVideoFrame;
+		DeviceOptions					mDeviceOptions;
 
 		float							mFrameRateDepth;
 		float							mFrameRateSkeletons;
 		float							mFrameRateVideo;
 
 		bool							mBinary;
+		bool							mFlipped;
 		bool							mGreyScale;
 		bool							mInverted;
+
+		uint_fast8_t					mTransform;
+
+		volatile bool					mNewDepthSurface;
+		volatile bool					mNewSkeletons;
+		volatile bool					mNewVideoSurface;
 
 		ci::Surface16u					mDepthSurface;
 		std::vector<Skeleton>			mSkeletons;
 		ci::Surface8u					mVideoSurface;
 
-		ImageResolution					mDepthResolution;
-		ImageResolution					mVideoResolution;
-		int32_t							mDepthHeight;
-		int32_t							mDepthWidth;
-		int32_t							mVideoHeight;
-		int32_t							mVideoWidth;
-		void							setDepthResolution( const ImageResolution &depthResolution );
-		void							setVideoResolution( const ImageResolution &videoResolution );
-
-		std::string						mDeviceId;
-		int32_t							mDeviceIndex;
-		bool							mEnabledNearMode;
 		INuiSensor						*mSensor;
 
 		FaceTracker						*mFaceTracker;
@@ -250,8 +364,8 @@ namespace KinectSdk
 
 		Pixel16u						*mRgbDepth;
 		Pixel							*mRgbVideo;
-		void							pixelToDepthSurface( ci::Surface16u &surface, uint16_t *buffer );
-		void							pixelToVideoSurface( ci::Surface8u &surface, uint8_t *buffer );
+		void							pixelToDepthSurface( uint16_t *buffer );
+		void							pixelToVideoSurface( uint8_t *buffer );
 		Pixel16u						shortToPixel( uint16_t value );
 
 		double							mReadTimeDepth;
@@ -259,14 +373,14 @@ namespace KinectSdk
 		double							mReadTimeVideo;
 
 		void							deactivateUsers();
-		int32_t							mUserCount;
+		volatile int32_t				mUserCount;
 		bool							mActiveUsers[ NUI_SKELETON_COUNT ];
 
-		void							error( HRESULT hr );
+		void							error( long hr );
 		bool							mVerbose;
 		static void						trace( const std::string &message );
 
-		friend void CALLBACK			deviceStatus( HRESULT hrStatus, const OLECHAR* instanceName, const OLECHAR* uniqueDeviceName, void * pUserData );
+		friend void CALLBACK			deviceStatus( long hr, const WCHAR *instanceName, const WCHAR *deviceId, void *data );
 
 	};
 

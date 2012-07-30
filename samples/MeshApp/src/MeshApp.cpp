@@ -60,19 +60,15 @@ class MeshApp : public ci::app::AppBasic
 public:
 
 	// Cinder callbacks
-	void draw();
-	void keyDown( ci::app::KeyEvent event );
-	void prepareSettings( ci::app::AppBasic::Settings * settings );
-	void resize( ci::app::ResizeEvent event );
-	void shutdown();
-	void setup();
-	void update();
+	void								draw();
+	void								keyDown( ci::app::KeyEvent event );
+	void								prepareSettings( ci::app::AppBasic::Settings *settings );
+	void								resize( ci::app::ResizeEvent event );
+	void								shutdown();
+	void								setup();
+	void								update();
 
 private:
-
-	// VBO dimensions
-	static const int32_t MESH_HEIGHT =	240;
-	static const int32_t MESH_WIDTH =	320;
 
 	// Kinect
 	float								mBrightTolerance;
@@ -89,35 +85,43 @@ private:
 	float								mVideoOffsetX;
 	float								mVideoOffsetY;
 
+	// Kinect callbacks
+	int32_t								mCallbackDepthId;
+	int32_t								mCallbackSkeletonId;
+	int32_t								mCallbackVideoId;
+	void								onDepthData( ci::Surface16u surface, const KinectSdk::DeviceOptions &deviceOptions );
+	void								onSkeletonData( std::vector<KinectSdk::Skeleton> skeletons, const KinectSdk::DeviceOptions &deviceOptions );
+	void								onVideoData( ci::Surface8u surface, const KinectSdk::DeviceOptions &deviceOptions );
+
 	// VBO
-	void				initMesh();
-	ci::gl::VboMesh		mVboMesh;
-	ci::gl::GlslProg	mShader;
+	void								initMesh();
+	ci::gl::VboMesh						mVboMesh;
+	ci::gl::GlslProg					mShader;
 
 	// Camera
-	ci::CameraPersp		mCamera;
-	ci::Vec3f			mEyePoint;
-	ci::Vec3f			mLookAt;
-	ci::Vec3f			mRotation;
+	ci::CameraPersp						mCamera;
+	ci::Vec3f							mEyePoint;
+	ci::Vec3f							mLookAt;
+	ci::Vec3f							mRotation;
 
 	// Lighting
-	ci::ColorAf			mLightAmbient;
-	ci::ColorAf			mLightDiffuse;
-	ci::Vec3f			mLightPosition;
-	float				mLightShininess;
-	ci::ColorAf			mLightSpecular;
+	ci::ColorAf							mLightAmbient;
+	ci::ColorAf							mLightDiffuse;
+	ci::Vec3f							mLightPosition;
+	float								mLightShininess;
+	ci::ColorAf							mLightSpecular;
 
 	// Window
-	float				mFrameRate;
-	bool				mFullScreen;
-	bool				mFullScreenPrev;
+	float								mFrameRate;
+	bool								mFullScreen;
+	bool								mFullScreenPrev;
 
 	// Parameters
-	ci::params::InterfaceGl	mParams;
+	ci::params::InterfaceGl				mParams;
 
 	// Debugging
-	void	screenShot();
-	void	trace( const std::string & message );
+	void								screenShot();
+	void								trace( const std::string & message );
 
 };
 
@@ -126,6 +130,10 @@ using namespace ci;
 using namespace ci::app;
 using namespace KinectSdk;
 using namespace std;
+
+// VBO dimensions
+const int32_t	kMeshHeight	= 240;
+const int32_t	kMeshWidth	= 320;
 
 // Render
 void MeshApp::draw()
@@ -150,19 +158,19 @@ void MeshApp::draw()
 		
 		// Bind and configure shader
 		mShader.bind();
-		mShader.uniform( "brightTolerance", mBrightTolerance );
-		mShader.uniform( "eyePoint", mEyePoint );
-		mShader.uniform( "lightAmbient", mLightAmbient );
-		mShader.uniform( "lightDiffuse", mLightDiffuse );
-		mShader.uniform( "lightPosition", mLightPosition );
-		mShader.uniform( "lightSpecular", mLightSpecular );
-		mShader.uniform( "positions", 0 );
-		mShader.uniform( "scale", mScale );
-		mShader.uniform( "showVideo", mShowVideo );
-		mShader.uniform( "shininess", mLightShininess );
-		mShader.uniform( "video", 1 );
-		mShader.uniform( "videoOffset", Vec2f( mVideoOffsetX, mVideoOffsetY ) );
-		mShader.uniform( "uvmix", mMeshUvMix );
+		mShader.uniform( "brightTolerance",	mBrightTolerance 						);
+		mShader.uniform( "eyePoint",		mEyePoint 								);
+		mShader.uniform( "lightAmbient",	mLightAmbient 							);
+		mShader.uniform( "lightDiffuse",	mLightDiffuse 							);
+		mShader.uniform( "lightPosition",	mLightPosition 							);
+		mShader.uniform( "lightSpecular",	mLightSpecular 							);
+		mShader.uniform( "positions",		0 										);
+		mShader.uniform( "scale",			mScale 									);
+		mShader.uniform( "showVideo",		mShowVideo 								);
+		mShader.uniform( "shininess",		mLightShininess 						);
+		mShader.uniform( "video",			1 										);
+		mShader.uniform( "videoOffset",		Vec2f( mVideoOffsetX, mVideoOffsetY )	);
+		mShader.uniform( "uvmix",			mMeshUvMix								);
 
 		// Draw VBO
 		gl::draw( mVboMesh );
@@ -185,8 +193,8 @@ void MeshApp::initMesh()
 {
 
 	// VBO dimensions as floats
-	float heightf = (float)MESH_HEIGHT;
-	float widthf = (float)MESH_WIDTH;
+	float heightf	= (float)kMeshHeight;
+	float widthf	= (float)kMeshWidth;
 
 	// VBO data
 	gl::VboMesh::Layout vboLayout;
@@ -209,10 +217,10 @@ void MeshApp::initMesh()
 	quad.push_back( Vec2f( 1.0f, 1.0f ) );
 
 	// Iterate through rows in the mesh
-	for ( int32_t y = 0; y < MESH_HEIGHT; y++ ) {
+	for ( int32_t y = 0; y < kMeshHeight; y++ ) {
 
 		// Iterate through the vectors in this row
-		for ( int32_t x = 0; x < MESH_WIDTH; x++ ) {
+		for ( int32_t x = 0; x < kMeshWidth; x++ ) {
 
 			// Get vertices as floats
 			float xf = (float)x;
@@ -225,7 +233,7 @@ void MeshApp::initMesh()
 			vboTexCoords.push_back( Vec2f( xf / widthf, yf / heightf ) );
 
 			// Do not add a quad to the bottom or right side of the mesh
-			if (x < MESH_WIDTH && y < MESH_HEIGHT) {
+			if ( x < kMeshWidth && y < kMeshHeight ) {
 
 				// Iterate through points in the quad to set indices
 				for ( vector<Vec2f>::const_iterator vertIt = quad.cbegin(); vertIt != quad.cend(); ++vertIt ) {
@@ -288,14 +296,34 @@ void MeshApp::keyDown( KeyEvent event )
 
 }
 
-// Prepare window
-void MeshApp::prepareSettings( Settings * settings )
+// Receives depth data 
+void MeshApp::onDepthData( Surface16u surface, const DeviceOptions &deviceOptions )
 {
+	mTextureDepth = gl::Texture( surface );
+}
 
-	// DO IT!
+// Receives skeleton data
+void MeshApp::onSkeletonData( vector<Skeleton> skeletons, const DeviceOptions &deviceOptions )
+{
+	mSkeletons = skeletons;
+}
+
+// Receives video data
+void MeshApp::onVideoData( Surface8u surface, const DeviceOptions &deviceOptions )
+{
+	if ( mTextureVideo ) {
+		mTextureVideo.update( surface, surface.getBounds() );
+	} else {
+		mTextureVideo = gl::Texture( surface );
+		mTextureVideo.setWrap( GL_REPEAT, GL_REPEAT );
+	}
+}
+
+// Prepare window
+void MeshApp::prepareSettings( Settings *settings )
+{
 	settings->setWindowSize( 1024, 768 );
 	settings->setFrameRate( 60.0f );
-
 }
 
 // Handles window resize
@@ -337,54 +365,59 @@ void MeshApp::setup()
 	mKinect->removeBackground();
 	mKinect->start();
 
+	// Add callbacks
+	mCallbackDepthId	= mKinect->addDepthCallback<MeshApp>( &MeshApp::onDepthData, this );
+	mCallbackSkeletonId	= mKinect->addSkeletonTrackingCallback<MeshApp>( &MeshApp::onSkeletonData, this );
+	mCallbackVideoId	= mKinect->addVideoCallback<MeshApp>( &MeshApp::onVideoData, this );
+
 	// Set up the light. This application does not actually use OpenGL 
 	// lighting. Instead, it passes a light position and color 
 	// values to the shader. Per fragment lighting is calculated in GLSL.
-	mLightAmbient = ColorAf( 0.0f, 0.0f, 0.0f, 1.0f );
-	mLightDiffuse = ColorAf( 0.5f, 0.5f, 0.5f, 1.0f );
-	mLightPosition = Vec3f( 0.0f, -600.0f, 180.0f );
-	mLightShininess = 2.0f;
-	mLightSpecular = ColorAf( 1.0f, 1.0f, 1.0f, 1.0f );
+	mLightAmbient	= ColorAf( 0.0f, 0.0f, 0.0f, 1.0f );
+	mLightDiffuse	= ColorAf( 0.5f, 0.5f, 0.5f, 1.0f );
+	mLightPosition	= Vec3f( 0.0f, -600.0f, 180.0f );
+	mLightShininess	= 2.0f;
+	mLightSpecular	= ColorAf( 1.0f, 1.0f, 1.0f, 1.0f );
 
 	// Set default properties
-	mBrightTolerance = 0.2f;
-	mFrameRate = 0.0f;
-	mFullScreen = isFullScreen();
-	mFullScreenPrev = mFullScreen;
-	mMeshUvMix = 0.2f;
-	mRemoveBackground = true;
-	mRemoveBackgroundPrev = mRemoveBackground;
-	mScale = Vec3f( 1.0f, 1.0f, 500.0f );
-	mShowVideo = false;
-	mVideoOffsetX = 0.0f;
-	mVideoOffsetY = 0.0f;
+	mBrightTolerance		= 0.2f;
+	mFrameRate				= 0.0f;
+	mFullScreen				= isFullScreen();
+	mFullScreenPrev			= mFullScreen;
+	mMeshUvMix				= 0.2f;
+	mRemoveBackground		= true;
+	mRemoveBackgroundPrev	= mRemoveBackground;
+	mScale					= Vec3f( 1.0f, 1.0f, 500.0f );
+	mShowVideo				= false;
+	mVideoOffsetX			= 0.0f;
+	mVideoOffsetY			= 0.0f;
 
 	// Create the parameters bar
 	mParams = params::InterfaceGl( "Parameters", Vec2i( 250, 500 ) );
 	mParams.addSeparator( "" );
-	mParams.addParam( "Bright tolerance", & mBrightTolerance, "min=0.000 max=1.000 step=0.001 keyDecr=b keyIncr=B" );
-	mParams.addParam( "Remove background", & mRemoveBackground, "key=c" );
-	mParams.addParam( "Scale", & mScale );
-	mParams.addSeparator( "" );
-	mParams.addParam( "Eye point", & mEyePoint );
-	mParams.addParam( "Look at", & mLookAt );
-	mParams.addParam( "Rotation", & mRotation );
-	mParams.addSeparator( "" );
-	mParams.addParam( "Show video", & mShowVideo, "key=d" );
-	mParams.addParam( "Video offset X", & mVideoOffsetX, "min=0.000 max=1.000 step=0.001 keyDecr=e keyIncr=E" );
-	mParams.addParam( "Video offset Y", & mVideoOffsetY, "min=0.000 max=1.000 step=0.001 keyDecr=f keyIncr=F" );
-	mParams.addSeparator( "" );
-	mParams.addParam( "Light position", & mLightPosition );
-	mParams.addParam( "Light shininess", & mLightShininess, "min=0.000 max=10000.000 step=0.001 keyDecr=g keyIncr=G" );
-	mParams.addSeparator( "" );
-	mParams.addParam( "Frame rate", & mFrameRate, "", true );
-	mParams.addParam( "Full screen", & mFullScreen, "key=h" );
-	mParams.addButton( "Save screen shot", std::bind( & MeshApp::screenShot, this ), "key=space" );
-	mParams.addButton( "Quit", std::bind( & MeshApp::quit, this ), "key=esc" );
+	mParams.addParam( "Bright tolerance",	&mBrightTolerance,					"min=0.000 max=1.000 step=0.001 keyDecr=b keyIncr=B"		);
+	mParams.addParam( "Remove background",	&mRemoveBackground,					"key=c"														);
+	mParams.addParam( "Scale",				&mScale																							);
+	mParams.addSeparator();
+	mParams.addParam( "Eye point",			&mEyePoint																						);
+	mParams.addParam( "Look at",			&mLookAt																						);
+	mParams.addParam( "Rotation",			&mRotation																						);
+	mParams.addSeparator();
+	mParams.addParam( "Show video",			&mShowVideo,						"key=d"														);
+	mParams.addParam( "Video offset X",		&mVideoOffsetX,						"min=0.000 max=1.000 step=0.001 keyDecr=e keyIncr=E"		);
+	mParams.addParam( "Video offset Y",		&mVideoOffsetY,						"min=0.000 max=1.000 step=0.001 keyDecr=f keyIncr=F"		);
+	mParams.addSeparator();
+	mParams.addParam( "Light position",		&mLightPosition																					);
+	mParams.addParam( "Light shininess",	&mLightShininess,					"min=0.000 max=10000.000 step=0.001 keyDecr=g keyIncr=G"	);
+	mParams.addSeparator();
+	mParams.addParam( "Frame rate",			&mFrameRate,						"", true													);
+	mParams.addParam( "Full screen",		&mFullScreen,						"key=h"														);
+	mParams.addButton( "Save screen shot",	bind( &MeshApp::screenShot, this ),	"key=space"													);
+	mParams.addButton( "Quit",				bind( &MeshApp::quit, this ),		"key=esc"													);
 
 	// Initialize texture
 	mTextureFormat.setInternalFormat( GL_RGBA_FLOAT32_ATI );
-	mTextureDepth = gl::Texture( Surface32f( MESH_WIDTH, MESH_HEIGHT, false, SurfaceChannelOrder::RGBA ), mTextureFormat );
+	mTextureDepth = gl::Texture( Surface32f( kMeshWidth, kMeshHeight, false, SurfaceChannelOrder::RGBA ), mTextureFormat );
 
 	// Initialize mesh
 	initMesh();
@@ -399,6 +432,9 @@ void MeshApp::shutdown()
 {
 
 	// Stop input
+	mKinect->removeCallback( mCallbackDepthId );
+	mKinect->removeCallback( mCallbackSkeletonId );
+	mKinect->removeCallback( mCallbackVideoId );
 	mKinect->stop();
 
 	// Clean up
@@ -437,42 +473,20 @@ void MeshApp::update()
 
 	// Kinect is running
 	if ( mKinect->isCapturing() ) {
+		mKinect->update();
 
-		// Get video image
-		if ( mKinect->checkNewVideoFrame() ) {
-			mTextureVideo = gl::Texture( mKinect->getVideo() );
-			mTextureVideo.setWrap( GL_REPEAT, GL_REPEAT );
-		}
+		// Find first active skeleton...
+		for ( vector<Skeleton>::const_iterator skeletonIt = mSkeletons.cbegin(); skeletonIt != mSkeletons.cend(); ++skeletonIt ) {
 
-		// Check depth texture
-		if ( mKinect->checkNewDepthFrame() ) {
+			// Valid skeletons have all joints available
+			if ( skeletonIt->size() == (uint32_t)JointName::NUI_SKELETON_POSITION_COUNT ) {
 
-			// Get depth texture
-			mTextureDepth = gl::Texture( mKinect->getDepth() );
-
-			// Check for skeletons
-			mSkeletons.clear();
-			if ( mKinect->checkNewSkeletons() ) {
-
-				// Get skeletons
-				mSkeletons = mKinect->getSkeletons();
-
-				// Find first active skeleton...
-				for ( vector<Skeleton>::const_iterator skeletonIt = mSkeletons.cbegin(); skeletonIt != mSkeletons.cend(); ++skeletonIt ) {
-
-					// Valid skeletons have all joints available
-					if ( skeletonIt->size() == (uint32_t)JointName::NUI_SKELETON_POSITION_COUNT ) {
-
-						// Subtle camera follow
-						Vec3f spine = skeletonIt->at( JointName::NUI_SKELETON_POSITION_SPINE ) * mEyePoint.z;
-						mLookAt.x = spine.x * 0.05f;
-						mLookAt.y = spine.y * 0.05f;
-						mEyePoint.x = -mLookAt.x * 0.5f;
-						mEyePoint.y = -mLookAt.y * 0.25f;
-
-					}
-
-				}
+				// Subtle camera follow
+				Vec3f spine = skeletonIt->at( JointName::NUI_SKELETON_POSITION_SPINE ).getPosition() * mEyePoint.z;
+				mLookAt.x = spine.x * 0.05f;
+				mLookAt.y = spine.y * 0.05f;
+				mEyePoint.x = -mLookAt.x * 0.5f;
+				mEyePoint.y = -mLookAt.y * 0.25f;
 
 			}
 
