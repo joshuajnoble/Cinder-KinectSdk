@@ -164,7 +164,7 @@ namespace KinectSdk
 
 	private:
 
-		static const int32_t			WAIT_TIME = 250;
+		static const int32_t			WAIT_TIME = 500;
 
 		Kinect();
 
