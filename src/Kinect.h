@@ -59,6 +59,22 @@ namespace KinectSdk
 	typedef NUI_SKELETON_POSITION_INDEX		JointName;
 	typedef std::shared_ptr<Kinect>			KinectRef;
 
+	class Face
+	{
+	
+		public:
+
+		std::vector<ci::Vec2f> screenPositions;
+		ci::Vec3f rotation;
+		ci::Vec3f transform;
+		float scale;
+
+		ci::Rectf faceRect;
+
+		std::map<std::string, float> animationUnitData;
+
+	};
+
 	//////////////////////////////////////////////////////////////////////////////////////////////
 
 	class Bone
@@ -124,6 +140,8 @@ namespace KinectSdk
 		bool				isVideoEnabled() const;
 		//! Returns true if user tracking is enabled.
 		bool				isUserTrackingEnabled() const;
+		//! Returns true if face tracking is enabled
+		bool				isFaceTrackingEnabled() const;
 
 		//! Enables depth tracking.
 		DeviceOptions&		enableDepth( bool enable = true );
@@ -144,12 +162,16 @@ namespace KinectSdk
 		DeviceOptions&		setDeviceIndex( int32_t index = 0 ); 
 		//! Sets resolution of video image.
 		DeviceOptions&		setVideoResolution( const ImageResolution &resolution = ImageResolution::NUI_IMAGE_RESOLUTION_640x480 ); 
+		//! Start face tracking
+		DeviceOptions&		enableFaceTracking( bool enable = false ); 
+
 	private:
 		bool				mEnabledDepth;
 		bool				mEnabledSeatedMode;
 		bool				mEnabledSkeletonTracking;
 		bool				mEnabledUserTracking;
 		bool				mEnabledVideo;
+		bool				mEnabledFaceTracking;
 
 		ImageResolution		mDepthResolution;
 		ci::Vec2i			mDepthSize;
@@ -190,6 +212,8 @@ namespace KinectSdk
 		uint32_t						addSkeletonTrackingCallback( const boost::function<void ( std::vector<Skeleton>, const DeviceOptions& )> &callback );
 		//! Adds video image callback.
 		uint32_t						addVideoCallback( const boost::function<void ( ci::Surface8u, const DeviceOptions& )> &callback );
+		//! Adds a callback for face tracking
+		uint32_t						addFaceTrackingCallback( const boost::function<void ( std::vector<Face>, const DeviceOptions& )> &callback );
 
 		//! Adds depth image callback
 		template<typename T> 
@@ -209,6 +233,14 @@ namespace KinectSdk
 		{
 			return addVideoCallback( boost::function<void ( ci::Surface8u, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
 		}
+
+		//! Adds face tracking callback.
+		template<typename T> 
+		inline uint32_t					addFaceTrackingCallback( void ( T::*callbackFunction )( std::vector<KinectSdk::Face> faces, const DeviceOptions& deviceOptions ), T *callbackObject ) 
+		{
+			return addFaceTrackingCallback( boost::function<void ( std::vector<Face>, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+		}
+
 		//! Removes callback.
 		void							removeCallback( uint32_t id );
 
@@ -275,8 +307,10 @@ namespace KinectSdk
 		int_fast8_t						getTransform() const;
 		//! Sets skeleton transform type.
 		void							setTransform( int_fast8_t transform = TRANSFORM_DEFAULT );
-
+		//! get the face tracking instance
 		FaceTracker						*getFaceTracker() { return mFaceTracker; }
+		//! a static method for the thread
+		static DWORD WINAPI StaticThread(PVOID lpParam);
 
 	private:
 		typedef boost::signals2::connection			Callback;
@@ -317,8 +351,10 @@ namespace KinectSdk
 		boost::signals2::signal<void ( ci::Surface16u, const DeviceOptions& )>			mSignalDepth;
 		boost::signals2::signal<void ( std::vector<Skeleton>, const DeviceOptions& )>	mSignalSkeleton;
 		boost::signals2::signal<void ( ci::Surface8u, const DeviceOptions& )>			mSignalVideo;
+		boost::signals2::signal<void ( std::vector<Face>, const DeviceOptions& )>			mSignalFaceTrack;
 		CallbackList					mCallbacks;
 
+		boost::mutex					mMutex;
 		DeviceOptions					mDeviceOptions;
 
 		float							mFrameRateDepth;
@@ -335,6 +371,7 @@ namespace KinectSdk
 		volatile bool					mNewDepthSurface;
 		volatile bool					mNewSkeletons;
 		volatile bool					mNewVideoSurface;
+		volatile bool					mNewFaceTrackData;
 
 		ci::Surface16u					mDepthSurface;
 		std::vector<Skeleton>			mSkeletons;
@@ -343,8 +380,9 @@ namespace KinectSdk
 		INuiSensor						*mSensor;
 
 		FaceTracker						*mFaceTracker;
-		IFTImage*						mFTColorImage;
-		IFTImage*						mFTDepthImage;
+		IFTImage                        *mFTColorImage;
+		IFTImage						*mFTDepthImage;
+		std::vector<KinectSdk::Face>			mFaceData;
 
 		double							mTiltRequestTime;
 
@@ -359,8 +397,9 @@ namespace KinectSdk
 		bool							mRemoveBackground;
 
 		volatile bool					mRunning;
-		std::shared_ptr<boost::thread>	mThread;
-		void							run();
+		//std::shared_ptr<boost::thread>	mThread;
+		HANDLE							mThread;
+		DWORD WINAPI 					run();
 
 		Pixel16u						*mRgbDepth;
 		Pixel							*mRgbVideo;
@@ -371,6 +410,9 @@ namespace KinectSdk
 		double							mReadTimeDepth;
 		double							mReadTimeSkeletons;
 		double							mReadTimeVideo;
+		bool							mNeedAllocateDepth;
+		bool							mNeedAllocateColor;
+		bool							mNeedFaceTracker;
 
 		void							deactivateUsers();
 		volatile int32_t				mUserCount;

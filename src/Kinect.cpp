@@ -176,6 +176,12 @@ namespace KinectSdk
 		return *this;
 	}
 
+	DeviceOptions& DeviceOptions::enableFaceTracking( bool enable )
+	{
+		mEnabledFaceTracking = enable;
+		return *this;
+	}
+
 	ImageResolution DeviceOptions::getDepthResolution() const
 	{
 		return mDepthResolution;
@@ -219,6 +225,11 @@ namespace KinectSdk
 	bool DeviceOptions::isSeatedModeEnabled() const
 	{
 		return mEnabledSeatedMode;
+	}
+
+	bool DeviceOptions::isFaceTrackingEnabled() const
+	{
+		return mEnabledFaceTracking;
 	}
 
 	bool DeviceOptions::isSkeletonTrackingEnabled() const
@@ -319,7 +330,6 @@ namespace KinectSdk
 
 	KinectRef Kinect::create()
 	{
-
 		return KinectRef( new Kinect( ) );
 	}
 
@@ -331,12 +341,6 @@ namespace KinectSdk
 		init();
 		for ( int32_t i = 0; i < NUI_SKELETON_COUNT; i++ ) {
 			mSkeletons.push_back( Skeleton() );
-		}
-
-		if(mEnabledFaceTracking) {
-			mFaceTracker = new FaceTracker( mVideoHeight, mVideoWidth, mDepthWidth, mDepthHeight, NUI_SKELETON_COUNT );
-			mFTColorImage = FTCreateImage();
-			mFTDepthImage = FTCreateImage();
 		}
 
 	}
@@ -384,6 +388,13 @@ namespace KinectSdk
 		return id;
 	}
 
+	uint32_t Kinect::addFaceTrackingCallback( const boost::function<void ( vector<Face>, const DeviceOptions& )> &callback )
+	{
+		uint32_t id = mCallbacks.empty() ? 0 : mCallbacks.rbegin()->first + 1;
+		mCallbacks.insert( std::make_pair( id, CallbackRef( new Callback( mSignalFaceTrack.connect( callback ) ) ) ) );
+		return id;
+	}
+
 	void Kinect::deactivateUsers()
 	{
 		for ( uint32_t i = 0; i < NUI_SKELETON_COUNT; i++ ) {
@@ -405,25 +416,6 @@ namespace KinectSdk
 	void Kinect::enableVerbose( bool enable )
 	{
 		mVerbose = enable;
-	}
-
-<<<<<<< HEAD
-	void Kinect::enableFaceTracking( bool enable )
-	{
-		mEnabledFaceTracking = enable;
-	}
-
-
-	void Kinect::enableVideo( bool enable )
-	{
-		bool toggle = mEnabledVideo != enable;
-		mEnabledVideo = enable;
-		if ( toggle ) {
-			if ( !mEnabledVideo ) {
-				mFrameRateVideo = 0.0f;
-			}
-			mVideoSurface = Surface8u( mVideoWidth, mVideoHeight, false, SurfaceChannelOrder::RGBA );
-		}
 	}
 
 	void Kinect::error( long hr ) {
@@ -581,6 +573,7 @@ namespace KinectSdk
 		mNewDepthSurface	= false;
 		mNewSkeletons		= false;
 		mNewVideoSurface	= false;
+		mNewFaceTrackData	= false;
 		mIsSkeletonDevice	= false;
 		mReadTimeDepth		= 0.0;
 		mReadTimeSkeletons	= 0.0;
@@ -608,7 +601,6 @@ namespace KinectSdk
 	bool Kinect::openDepthStream()
 	{
 		if ( mSensor != 0) {
-
 			long hr = mSensor->NuiImageStreamOpen( mDeviceOptions.getDepthResolution() != ImageResolution::NUI_IMAGE_RESOLUTION_640x480 && 
 				HasSkeletalEngine( mSensor ) ? NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX : NUI_IMAGE_TYPE_DEPTH, mDeviceOptions.getDepthResolution(), 0, 2, 0, &mDepthStreamHandle );;
 			if ( FAILED( hr ) ) {
@@ -705,13 +697,16 @@ namespace KinectSdk
 		mCallbacks.erase( id ); 
 	}
 
-	void Kinect::run()
+	DWORD WINAPI Kinect::run()
 	{
 		while ( mCapture ) {
 			if ( mSensor != 0 ) {
 
 				// Get elapsed time to calculate frame rate
 				double time = getElapsedSeconds();
+
+				_NUI_SKELETON_FRAME skeletonFrame;
+				bool newVideo = false, newDepth = false;
 
 				//////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -732,12 +727,32 @@ namespace KinectSdk
 						if ( lockedRect.Pitch == 0 ) {
 							trace( "Invalid buffer length received" );
 						} else {
+
+							//boost::mutex::scoped_lock l(mMutex);
+
 							pixelToDepthSurface( (uint16_t*)lockedRect.pBits );
 
 							// if face tracking, copy here
-							if(mEnabledFaceTracking)
-								//memcpy(mFTColorImage->GetBuffer(), PBYTE(lockedRect.pBits), min(mFTColorImage->GetBufferSize(), UINT(texture->BufferLen())));
+							if(mEnabledFaceTracking) {
+
+								if( mNeedAllocateDepth ) {
+									mFTDepthImage = FTCreateImage();
+									mFTDepthImage->Allocate(mDeviceOptions.getDepthSize().x, mDeviceOptions.getDepthSize().y, FTIMAGEFORMAT_UINT16_D13P3);
+
+									if (FAILED(hr)) {
+										trace( " mFTColorImage Allocate failed ");
+									} else {
+										mNeedAllocateDepth = false;
+									}
+
+								}
+
 								memcpy(mFTDepthImage->GetBuffer(), PBYTE(lockedRect.pBits), min(mFTDepthImage->GetBufferSize(), UINT(texture->BufferLen())));
+								newDepth = true;
+
+
+							}
+
 						}
 
 						hr = mSensor->NuiImageStreamReleaseFrame( mDepthStreamHandle, &imageFrame );
@@ -761,10 +776,12 @@ namespace KinectSdk
 				}
 
 				//////////////////////////////////////////////////////////////////////////////////////////////
-				_NUI_SKELETON_DATA skeletonData;
+
 				if ( mDeviceOptions.isSkeletonTrackingEnabled() && mIsSkeletonDevice && !mNewSkeletons ) {
 
-					_NUI_SKELETON_FRAME skeletonFrame;
+					_NUI_SKELETON_BONE_ORIENTATION bones[ NUI_SKELETON_POSITION_COUNT ];
+					_NUI_TRANSFORM_SMOOTH_PARAMETERS transform;
+
 					long hr = mSensor->NuiSkeletonGetNextFrame( WAIT_TIME, &skeletonFrame );
 					if ( FAILED( hr ) ) {
 						error( hr );
@@ -779,15 +796,14 @@ namespace KinectSdk
 							if ( trackingState == NUI_SKELETON_TRACKED || trackingState == NUI_SKELETON_POSITION_ONLY ) {
 
 								if ( !foundSkeleton ) {
-									_NUI_TRANSFORM_SMOOTH_PARAMETERS transform = kTransformParams[ mTransform ];
+									transform = kTransformParams[ mTransform ];
 									hr = mSensor->NuiTransformSmooth( &skeletonFrame, &transform );
 									if ( FAILED( hr ) ) {
 										error( hr );
 									}
 									foundSkeleton = true;
 								}
-								// Get skeleton data
-								skeletonData = *( skeletonFrame.SkeletonData + i );
+
 								// Flip X when flipping the image.
 								if ( mFlipped ) {
 									( skeletonFrame.SkeletonData + i )->Position.x *= -1.0f;
@@ -796,7 +812,6 @@ namespace KinectSdk
 									}
 								}
 
-								_NUI_SKELETON_BONE_ORIENTATION bones[ NUI_SKELETON_POSITION_COUNT ];
 								hr = NuiSkeletonCalculateBoneOrientations( skeletonFrame.SkeletonData + i, bones );
 								if ( FAILED( hr ) ) {
 									error( hr );
@@ -806,7 +821,9 @@ namespace KinectSdk
 									Bone bone( *( ( skeletonFrame.SkeletonData + i )->SkeletonPositions + j ), *( bones + j ) );
 									( mSkeletons.begin() + i )->insert( std::make_pair<JointName, Bone>( (JointName)j, bone ) );
 								}
+
 							}
+
 						}
 
 						mFrameRateSkeletons = (float)( 1.0 / ( time - mReadTimeSkeletons ) );
@@ -834,10 +851,26 @@ namespace KinectSdk
 							error( hr );
 						}
 						if ( lockedRect.Pitch != 0 ) {
+
 							pixelToVideoSurface( (uint8_t *)lockedRect.pBits );
 
-							if(mEnabledFaceTracking)
+							// if we're doing face tracking it needs to get copied here
+							if(mEnabledFaceTracking) {
+
+								if( mNeedAllocateColor ) {
+									mFTColorImage = FTCreateImage();
+									hr = mFTColorImage->Allocate(640, 480, FTIMAGEFORMAT_UINT8_B8G8R8X8);
+									if (FAILED(hr)) {
+										trace( " mFTColorImage Allocate failed ");
+									}  else {
+										mNeedAllocateColor = false;
+									}
+								}
+
 								memcpy(mFTColorImage->GetBuffer(), PBYTE(lockedRect.pBits), min(mFTColorImage->GetBufferSize(), UINT(texture->BufferLen())));
+								//mFTColorImage->Attach(mDeviceOptions.getVideoSize().x, mDeviceOptions.getVideoSize().y, PBYTE(lockedRect.pBits), FTIMAGEFORMAT_UINT8_R8G8B8, 640*3);
+								newVideo = true;
+							}
 
 						} else {
 							trace( "Invalid buffer length received." );
@@ -856,30 +889,66 @@ namespace KinectSdk
 
 				}
 
+				////////////////////////////////////////////////////////////////////////////////////////////
+
 				if(mEnabledFaceTracking)
 				{
 
-					//FT_SENSOR_DATA sensorData(mFTColorImage, mFTDepthImage, mSensor.GetZoomFactor(), m_KinectSensor.GetViewOffSet());
-					FT_SENSOR_DATA sensorData(mFTColorImage, mFTDepthImage);
+					if(mNeedFaceTracker) {
+						mFaceTracker = new FaceTracker( 
+						mDeviceOptions.getVideoSize().x,
+						mDeviceOptions.getVideoSize().y,
+						mDeviceOptions.getDepthSize().x,
+						mDeviceOptions.getDepthSize().y,
+						1.0,
+						1 );
 
-					FT_VECTOR3D hint[2];
-					hint[0].x = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_HEAD].x;
-					hint[0].y = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_HEAD].y;
-					hint[0].z = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_HEAD].z;
-
-					hint[1].x = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_SPINE].x;
-					hint[1].y = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_SPINE].y;
-					hint[1].z = skeletonData.SkeletonPositions[NUI_SKELETON_POSITION_SPINE].z;
-
-					if (mFaceTracker->lastTrackSucceeded())
-					{
-						mFaceTracker->continueTracking(&sensorData, hint);
+						mNeedFaceTracker = false;
 					}
-					else
+
+
+					// make sure we have both color && depth buffers to work with
+					if(newDepth || newVideo)
 					{
-						mFaceTracker->startTracking(&sensorData, NULL, hint);
+						FT_SENSOR_DATA sensorData(mFTColorImage, mFTDepthImage);
+						FT_VECTOR3D hint[2];
+
+						// at some point support multiple faces
+						hint[0].x = skeletonFrame.SkeletonData[0].SkeletonPositions[NUI_SKELETON_POSITION_HEAD].x;
+						hint[0].y = skeletonFrame.SkeletonData[0].SkeletonPositions[NUI_SKELETON_POSITION_HEAD].y;
+						hint[0].z = skeletonFrame.SkeletonData[0].SkeletonPositions[NUI_SKELETON_POSITION_HEAD].z;
+
+						hint[1].x = skeletonFrame.SkeletonData[0].SkeletonPositions[NUI_SKELETON_POSITION_SPINE].x;
+						hint[1].y = skeletonFrame.SkeletonData[0].SkeletonPositions[NUI_SKELETON_POSITION_SPINE].y;
+						hint[1].z = skeletonFrame.SkeletonData[0].SkeletonPositions[NUI_SKELETON_POSITION_SPINE].z;
+
+						/*if (mFaceTracker->lastTrackSucceeded())
+						{
+							mFaceTracker->continueTracking(&sensorData, hint);
+						}
+						else
+						{
+							mFaceTracker->startTracking(&sensorData, NULL, hint);
+						}*/
+
+						mFaceTracker->checkFaces( (NUI_SKELETON_FRAME*) &skeletonFrame, mFTColorImage, mFTDepthImage, 1.0, 0);
+
+						if(mFaceTracker->getNumFaces() > 0) {
+
+							cout << " we have a face " << mFaceTracker->getNumFaces() << endl;
+
+							mNewFaceTrackData = true;
+							mFaceData.clear();
+							for( int i = 0; i < mFaceTracker->getNumFaces(); i++) {
+
+								Face newFace;
+								mFaceTracker->getProjectedShape(0, newFace.scale, newFace.rotation, newFace.transform, newFace.screenPositions);
+								mFaceData.push_back(newFace);
+							}
+						}
 					}
 				}
+
 
 			}
 
@@ -888,7 +957,7 @@ namespace KinectSdk
 		}
 
 		// Return to join thread
-		return;
+		return 0;
 	}
 
 	void Kinect::setFlipped( bool flipped ) 
@@ -1133,6 +1202,14 @@ namespace KinectSdk
 				mRgbVideo		= new Pixel[ videoSize.x * videoSize.y * 4 ];
 			}
 
+			// are we doing face tracking?
+			if( mDeviceOptions.isFaceTrackingEnabled()) 
+			{
+				mNeedAllocateColor = true;
+				mNeedAllocateDepth = true;
+				mNeedFaceTracker = true;
+			}
+
 			// Set image stream flags
 			flags = NUI_IMAGE_STREAM_FRAME_LIMIT_MAXIMUM;
 			if ( mDeviceOptions.isNearModeEnabled() ) {
@@ -1144,15 +1221,6 @@ namespace KinectSdk
 				error( hr );
 			}
 
-			bool enabledDepth = mEnabledDepth;
-			bool enabledSkeletons = mEnabledSkeletons;
-			bool enabledVideo = mEnabledVideo;
-			mEnabledDepth = false;
-			mEnabledSkeletons = false;
-			mEnabledVideo = false;
-			enableDepth( enabledDepth );
-			enableSkeletons( enabledSkeletons );
-			enableVideo( enabledVideo ); 
 			// Initialize skeletons
 			mSkeletons.clear();
 			for ( int32_t i = 0; i < NUI_SKELETON_COUNT; i++ ) {
@@ -1161,18 +1229,31 @@ namespace KinectSdk
 
 			// Start thread
 			mCapture = true;
-			mThread = std::shared_ptr<boost::thread>( new boost::thread( boost::bind( &Kinect::run, this ) ) );
-
+			//mThread = std::shared_ptr<boost::thread>( new boost::thread( boost::bind( &Kinect::run, this ) ) );
+			mThread = CreateThread(NULL, 0, &Kinect::StaticThread, (PVOID)this, 0, 0);
 		}
+	}
 
+	DWORD WINAPI Kinect::StaticThread(PVOID lpParam)
+	{
+		Kinect* device = static_cast<Kinect*>(lpParam);
+		if (device)
+		{
+			return device->run();
+		}
+		return 0;
 	}
 
 	void Kinect::stop()
 	{
 		mCapture = false;
 		if ( mThread ) {
-			mThread->join();
-			mThread.reset();
+			//mThread->join();
+			//mThread.reset();
+			if (mThread) {
+				WaitForSingleObject(mThread, 1000);
+			}
+			mThread = 0;
 		}
 		if ( mRgbDepth != 0 ) {
 			delete [] mRgbDepth;
@@ -1202,6 +1283,10 @@ namespace KinectSdk
 		if ( mNewVideoSurface ) {
 			mSignalVideo( mVideoSurface, mDeviceOptions );
 			mNewVideoSurface = false;
+		}
+		if ( mNewFaceTrackData ) {
+			mSignalFaceTrack( mFaceData, mDeviceOptions );
+			mNewFaceTrackData = false;
 		}
 	}
 
