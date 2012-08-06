@@ -2,8 +2,8 @@
 #pragma once
 
 #include <FaceTrackLib.h>
+#include "Kinect.h"
 
-#include "NuiApi.h"
 #include "cinder\Cinder.h"
 #include "cinder\Vector.h"
 #include "cinder\Rect.h"
@@ -16,95 +16,36 @@
 //{
 
 	using namespace ci;
+	using namespace KinectSdk;
 
-	/*class FTHelperContext
+	typedef NUI_SKELETON_BONE_ROTATION		BoneRotation;
+	typedef NUI_IMAGE_RESOLUTION			ImageResolution;
+	typedef NUI_SKELETON_POSITION_INDEX		JointName;
+
+	class Face
+	{
+	
+		public:
+
+		std::vector<ci::Vec2f> screenPositions;
+		ci::Vec3f rotation;
+		ci::Vec3f transform;
+		float scale;
+
+		ci::Rectf faceRect;
+
+		void trace( const std::string &message );
+		std::map<std::string, float> animationUnitData;
+
+	};
+
+	class FTHelperContext
 	{
 	public:
 
-		void initialize( FT_CAMERA_CONFIG *videoCameraConfig, FT_CAMERA_CONFIG *depthCameraConfig) {
-
-			mFaceTracker = FTCreateFaceTracker();
-
-			if(!mFaceTracker) {
-				trace( " Can't create face tracker " );
-			}
-
-			HRESULT hr;
-
-			hr = mFaceTracker->Initialize( videoCameraConfig, depthCameraConfig, NULL, NULL );
-			//E_INVALIDARG, E_POINTER, FT_ERROR_INVALID_MODEL_PATH, FT_ERROR_INVALID_MODELS, E_OUTOFMEMORY
-			switch ( hr ) {
-				case E_POINTER:
-					trace( "Bad pointer." );
-					break;
-					case FT_ERROR_INVALID_MODEL_PATH:
-					trace( " FT_ERROR_INVALID_MODEL_PATH " );
-					break;
-					case FT_ERROR_INVALID_MODELS:
-					trace( " FT_ERROR_INVALID_MODELS " );
-					break;
-					case E_OUTOFMEMORY:
-					trace( " E_OUTOFMEMORY " );
-					break;
-									case E_INVALIDARG:
-					trace( " E_INVALIDARG " );
-					break;
-				case S_OK:
-					break;
-				case FT_ERROR_UNINITIALIZED:
-					trace( " FT_ERROR_UNINITIALIZED ");
-					break;
-		case FT_ERROR_KINECT_DLL_FAILED:
-			trace(" dll failed ");
-			break;
-		case S_FALSE:
-			trace( "Data not available." );
-			break;
-				default:
-					std::stringstream ss;
-					ss << hr;
-					trace( "Unknown error " );
-					trace(ss.str());
-				}
-
-			hr = mFaceTracker->CreateFTResult(&mFTResult);
-
-			if( !SUCCEEDED(hr) ) {
-				std::cout << " can't create mFTResult " << std::endl;
-			}
-
-			switch ( hr ) {
-				case E_POINTER:
-					trace( "Bad pointer." );
-					break;
-				case S_OK:
-					break;
-				case FT_ERROR_UNINITIALIZED:
-					trace( " FT_ERROR_UNINITIALIZED ");
-					break;
-				default:
-					trace( "Unknown error " );
-				}
-
-			mFTResult->Reset();
-		};
-
-		void trace( const std::string &message ) 
-		{
-			//ci::app::console() << message << "\n";
-			OutputDebugStringA( ( message + "\n" ).c_str() );
-		}
-
-		IFTFaceTracker		*mFaceTracker;
-		IFTResult           *mFTResult;
-		IFTModel			*mFTModel;
-		FT_VECTOR3D         mHint3D[2];
-		bool                mLastTrackSucceeded;
-		int                 mCountUntilFailure;
-		UINT                mSkeletonId;
-	};*/
-
-	struct FTHelperContext {
+		FTHelperContext() {}; // does nothing
+		void initialize( FT_CAMERA_CONFIG *videoCameraConfig, FT_CAMERA_CONFIG *depthCameraConfig);
+		void trace( const std::string &message );
 		IFTFaceTracker		*mFaceTracker;
 		IFTResult           *mFTResult;
 		IFTModel			*mFTModel;
@@ -114,19 +55,25 @@
 		UINT                mSkeletonId;
 	};
 
+	class FaceTracker;
+	typedef std::shared_ptr<FaceTracker>			FaceTrackerRef;
+
 	class FaceTracker {
 
 		public:
 
-		FaceTracker( int rgbImageWidth = 640, int rgbImageHeight = 480, int depthWidth = 320, int depthHeight = 240, float zoom = 1.0, int numUsers = NUI_SKELETON_COUNT );
-		
-		//std::tr1::shared_ptr<std::vector< std::tr1::shared_ptr<FTHelperContext>>> mContexts;
-		std::vector< FTHelperContext* > *mContexts;
+		// constructor
+		FaceTracker() {}
+			
+		void init( int rgbImageWidth = 640, int rgbImageHeight = 480, int depthWidth = 320, int depthHeight = 240, float zoom = 1.0, int numUsers = NUI_SKELETON_COUNT );
 
-		FTHelperContext* context;
+		//! Creates pointer to instance of Kinect
+		static FaceTrackerRef				create();	
 
+		//! get the vert indices for the triangles of a face
 		std::vector<uint32_t> getFaceTriangles( UINT userId );
 	
+		//! return the number of faces that we'r tracking
 		uint32_t getNumFaces();
 
 		// would be nice to get the middle of the face, no?
@@ -140,6 +87,82 @@
 		//! just the animation units, useful if you want to use this as a NUI of some sort
 		void getAnimationUnits( std::map<std::string, float> &units, UINT userId);
 
+		//! Start the Kinect and the Face Tracking
+		void start( const DeviceOptions &deviceOptions = DeviceOptions() );
+		//! update both the Kinect and the FaceTracking
+		void update();
+		
+		//! Adds depth image callback to the Kinect
+		uint32_t						addDepthCallback( const boost::function<void ( ci::Surface16u, const DeviceOptions& )> &callback );
+		//! Adds skeleton tracking callback to the Kinect
+		uint32_t						addSkeletonTrackingCallback( const boost::function<void ( std::vector<Skeleton>, const DeviceOptions& )> &callback );
+		//! Adds video image callback to the Kinect
+		uint32_t						addVideoCallback( const boost::function<void ( ci::Surface8u, const DeviceOptions& )> &callback );
+		//! Adds a callback for face tracking to this
+		uint32_t						addFaceTrackingCallback( const boost::function<void ( std::vector<Face>, const DeviceOptions& )> &callback );
+
+		//! Adds depth image callback to the Kinect
+		template<typename T> 
+		inline uint32_t					addDepthCallback( void ( T::*callbackFunction )( ci::Surface16u surface, const DeviceOptions& deviceOptions ), T *callbackObject )
+		{
+			//return addDepthCallback( boost::function<void ( ci::Surface16u, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+			return mKinect->addDepthCallback<T>(callbackFunction, callbackObject);
+		}
+		//! Adds skeleton tracking callback to the Kinect
+		template<typename T> 
+		inline uint32_t					addSkeletonTrackingCallback( void ( T::*callbackFunction )( std::vector<Skeleton> skeletons, const DeviceOptions &deviceOptions ), T *callbackObject )
+		{
+			//return addSkeletonTrackingCallback( boost::function<void ( std::vector<Skeleton>, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+			return mKinect->addSkeletonTrackingCallback<T>(callbackFunction, callbackObject);
+		}
+		//! Adds video image callback to the Kinect
+		template<typename T> 
+		inline uint32_t					addVideoCallback( void ( T::*callbackFunction )( ci::Surface8u surface, const DeviceOptions& deviceOptions ), T *callbackObject ) 
+		{
+			//return addVideoCallback( boost::function<void ( ci::Surface8u, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+			return mKinect->addVideoCallback<T>(callbackFunction, callbackObject);
+		}
+
+		//! Adds face tracking callback to the Kinect
+		template<typename T> 
+		inline uint32_t					addFaceTrackingCallback( void ( T::*callbackFunction )( std::vector<Face> faces, const DeviceOptions& deviceOptions ), T *callbackObject ) 
+		{
+			return addFaceTrackingCallback( boost::function<void ( std::vector<Face>, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+		}
+
+		//! Adds face tracking callback.
+		template<typename T> 
+		inline uint32_t					addUserSelectionCallback( void ( T::*callbackFunction )( bool sucess, const DeviceOptions& deviceOptions ), T *callbackObject ) 
+		{
+			return addFaceTrackingCallback( boost::function<void ( bool sucess, const DeviceOptions& )>( boost::bind( callbackFunction, callbackObject, ::_1, ::_2 ) ) );
+		}
+
+		void setDeviceOptions(KinectSdk::DeviceOptions &options);
+
+				//! Removes callback.
+		void							removeCallback( uint32_t id );
+
+		KinectRef						getKinect() { return mKinect; } // so you can just access it easily
+
+		void stop();
+		void run();
+
+	private:
+
+		KinectSdk::CallbackList			mCallbacks;
+
+		KinectSdk::DeviceOptions		mDeviceOptions;
+
+		FTHelperContext					*mContexts;
+
+		IFTImage		                *mFTColorImage;
+		IFTImage						*mFTDepthImage;
+		std::vector<Face>				mFaceData;
+		KinectSdk::KinectRef			mKinect;
+
+		bool mHasKinect;
+		bool mNewFaceTrackData;
+
 		bool lastTrackSucceeded();
 		bool lastTrackSucceeded(int userId);
 
@@ -149,14 +172,23 @@
 		void startTracking( const FT_SENSOR_DATA *pSensorData, const RECT *pRoi, const FT_VECTOR3D headPoints[2], int skeletonId);
 		void continueTracking( const FT_SENSOR_DATA *pSensorData, const FT_VECTOR3D headPoints[2], int skeletonId);
 
-	private:
+		boost::signals2::signal<void ( std::vector<Face>, const DeviceOptions& )>			mSignalFaceTrack;
 
 		FT_CAMERA_CONFIG mVideoCameraConfig, mDepthCameraConfig;
+
+		DWORD WINAPI FaceTrackingThread();
+		static DWORD WINAPI FaceTrackingStaticThread(PVOID lpParam);
+		//static void SelectUserToTrack(KinectSensor * pKinectSensor, UINT nbUsers, FTHelperContext* pUserContexts);
 
 		float mZoomFactor, mViewOffset;
 		int inited;
 		int mNumUsers;
 		bool mNeedInitializeContexts;
+
+		HANDLE mFaceTrackingThread;
+
+		
+		void GetClosestHint(FT_VECTOR3D* pHint3D);
 
 	};
 //};
